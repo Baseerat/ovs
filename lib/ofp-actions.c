@@ -1784,7 +1784,8 @@ struct ofp_action_get_load_avg {
     ovs_be16 len;
 
     ovs_be16 field_id;
-    uint8_t zero[2];
+    uint8_t index;
+    uint8_t zero[1];
 };
 OFP_ASSERT(sizeof(struct ofp_action_get_load_avg) == 8);
 
@@ -1795,6 +1796,7 @@ decode_OFPAT_RAW_GET_LOAD_AVG(const struct ofp_action_get_load_avg *a,
     struct ofpact_get_load_avg *gla;
     gla = ofpact_put_GET_LOAD_AVG(out);
     gla->field_id = ntohs(a->field_id);
+    gla->index = a->index;
     return 0;
 }
 
@@ -1806,6 +1808,7 @@ encode_GET_LOAD_AVG(const struct ofpact_get_load_avg *gla,
         struct ofp_action_get_load_avg *a;
         a = put_OFPAT_GET_LOAD_AVG(out);
         a->field_id = htons(gla->field_id);
+        a->index = gla->index;
     }
 }
 
@@ -1814,8 +1817,21 @@ parse_GET_LOAD_AVG(const char *arg, struct ofpbuf *ofpacts,
                    enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     struct ofpact_get_load_avg *gla;
+    char *field, *index;
+    char *tokstr, *save_ptr;
+
+    save_ptr = NULL;
+    tokstr = xstrdup(arg);
+    field = strtok_r(tokstr, ", ", &save_ptr);
+    index = save_ptr;
+
     gla = ofpact_put_GET_LOAD_AVG(ofpacts);
-    gla->field_id = mf_from_name(arg)->id;
+    gla->field_id = mf_from_name(field)->id;
+    gla->index = (uint8_t)strtol(index, NULL, 16);
+
+    if (!(gla->index < 3)) {
+        return xasprintf("%s: invalid index `%i'", arg, gla->index);
+    }
 
     return NULL;
 }
@@ -1825,7 +1841,7 @@ format_GET_LOAD_AVG(const struct ofpact_get_load_avg *a, struct ds *s)
 {
     const char *field;
     field = mf_from_id(a->field_id)->name;
-    ds_put_format(s, "get_load_avg(%s)", field);
+    ds_put_format(s, "get_load_avg(%s,%i)", field, a->index);
 }
 
 /* Action structure for NXAST_OUTPUT_REG.

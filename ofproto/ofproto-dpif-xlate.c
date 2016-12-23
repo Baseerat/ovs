@@ -4531,6 +4531,8 @@ compose_get_load_avg(struct xlate_ctx *ctx,
             OVS_NOT_REACHED();
     }
 
+    nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, gla->index);
+
     nl_msg_end_nested(ctx->odp_actions, offset);
 }
 

@@ -825,6 +825,9 @@ struct ofpact_sub_from_field {
 struct ofpact_get_load_avg {
     struct ofpact ofpact;
     enum mf_field_id field_id;
+    uint8_t index; // 1: avg load over last 1 mins
+                   // 2: avg load over last 5 mins
+                   // 3: avg load over last 15 mins
 };
 
 /* Converting OpenFlow to ofpacts. */

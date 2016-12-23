@@ -722,12 +722,13 @@ static bool
 odp_execute_get_load_avg(struct dp_packet *packet,
                          const struct nlattr *a)
 {
-    enum ovs_calc_field_attr field_key = nl_attr_type(a);
+    enum ovs_calc_field_attr field_key = nl_attr_type(a); a = nl_attr_next(a);
+    uint8_t index = nl_attr_get_u8(a);
     double loadavg[3];
     ovs_be32 res32;
-    
+
     if (getloadavg(loadavg, 3) == 3) {
-        res32 = htonl((uint32_t)(loadavg[1]*100.0));
+        res32 = htonl((uint32_t)(loadavg[index]*100.0));
     }
     else
     {
