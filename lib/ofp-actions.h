@@ -131,6 +131,7 @@
     OFPACT(CALC_FIELDS_UPDATE, ofpact_calc_fields, ofpact, "calc_fields_update") \
     OFPACT(ADD_TO_FIELD,    ofpact_add_to_field, ofpact, "add_to_field") \
     OFPACT(SUB_FROM_FIELD,  ofpact_sub_from_field, ofpact, "sub_from_field") \
+    OFPACT(GET_LOAD_AVG,    ofpact_get_load_avg, ofpact, "get_load_avg") \
     OVS_OFPACTS
 
 /* enum ofpact_type, with a member OFPACT_<ENUM> for each action. */
@@ -816,6 +817,14 @@ struct ofpact_sub_from_field {
     const struct mf_field *field;
     union mf_value value;
     union mf_value mask;
+};
+
+// @P4:
+/* OFPACT_GET_LOAD_AVG.
+ */
+struct ofpact_get_load_avg {
+    struct ofpact ofpact;
+    enum mf_field_id field_id;
 };
 
 /* Converting OpenFlow to ofpacts. */

@@ -719,6 +719,33 @@ odp_execute_remove_header(struct dp_packet *packet,
 }
 
 static bool
+odp_execute_get_load_avg(struct dp_packet *packet,
+                         const struct nlattr *a)
+{
+    enum ovs_calc_field_attr field_key = nl_attr_type(a);
+    double loadavg[3];
+    ovs_be32 res32;
+    
+    if (getloadavg(loadavg, 3) == 3) {
+        res32 = htonl((uint32_t)(loadavg[1]*100.0));
+    }
+    else
+    {
+        res32 = htonl((uint32_t)-1);
+    }
+
+    switch (field_key) {
+        OVS_ODP_EXECUTE_GET_LOAD_AVG_32BIT_CASES
+
+        case OVS_CALC_FIELD_ATTR_UNSPEC:
+        case __OVS_CALC_FIELD_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
+    }
+}
+
+
+static bool
 requires_datapath_assistance(const struct nlattr *a)
 {
     enum ovs_action_attr type = nl_attr_type(a);
@@ -752,6 +779,7 @@ requires_datapath_assistance(const struct nlattr *a)
 	case OVS_ACTION_ATTR_CALC_FIELDS_VERIFY:
 	case OVS_ACTION_ATTR_ADD_HEADER:
 	case OVS_ACTION_ATTR_REMOVE_HEADER:
+    case OVS_ACTION_ATTR_GET_LOAD_AVG:
 	case OVS_ACTION_ATTR_DEPARSE:
 		return false;
 
@@ -937,6 +965,14 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
 			}
 			break;
 		}
+
+        /* @P4: */
+        case OVS_ACTION_ATTR_GET_LOAD_AVG: {
+            for (i = 0; i < cnt; i++) {
+                odp_execute_get_load_avg(packets[i], nl_attr_get(a));
+            }
+            break;
+        }
 
 		/* @P4: */
 		case OVS_ACTION_ATTR_DEPARSE:

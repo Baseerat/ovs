@@ -4116,6 +4116,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 		case OFPACT_MODIFY_FIELD:
 		case OFPACT_REMOVE_HEADER:
 		case OFPACT_ADD_HEADER:
+        case OFPACT_GET_LOAD_AVG:
 		case OFPACT_DEPARSE:
 			break;
 
@@ -4506,6 +4507,31 @@ compose_deparse(struct xlate_ctx *ctx)
                                       ctx->odp_actions, ctx->wc,
                                       use_masked);
     nl_msg_put_flag(ctx->odp_actions, OVS_ACTION_ATTR_DEPARSE);
+}
+
+// @P4:
+static void
+compose_get_load_avg(struct xlate_ctx *ctx,
+                     const struct ofpact_get_load_avg *gla)
+{
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->odp_actions, ctx->wc,
+                                          use_masked);
+
+    size_t offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_GET_LOAD_AVG);
+
+    switch (gla->field_id) {
+        /* @Shahbaz: this needs to be renamed. */
+        OVS_COMPOSE_CALC_FIELDS_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+    }
+
+    nl_msg_end_nested(ctx->odp_actions, offset);
 }
 
 static void
@@ -4933,6 +4959,14 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 		// @P4:
 		case OFPACT_MODIFY_FIELD:
 			break;
+
+        // @P4:
+        case OFPACT_GET_LOAD_AVG: {
+            const struct ofpact_get_load_avg *get_load_avg;
+            get_load_avg = ofpact_get_GET_LOAD_AVG(a);
+            compose_get_load_avg(ctx, get_load_avg);
+            break;
+        }
 
         // @P4:
 		case OFPACT_DEPARSE:

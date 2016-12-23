@@ -730,6 +730,7 @@ enum ovs_action_attr {
 	OVS_ACTION_ATTR_ADD_HEADER,
 	OVS_ACTION_ATTR_REMOVE_HEADER,
 	OVS_ACTION_ATTR_DEPARSE,
+	OVS_ACTION_ATTR_GET_LOAD_AVG,
 #endif
 	__OVS_ACTION_ATTR_MAX,	      /* Nothing past this will be accepted
 				       * from userspace. */

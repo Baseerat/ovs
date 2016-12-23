@@ -328,6 +328,10 @@ enum ofp_raw_action_type {
 	/* OF1.5+(37): struct ofp_action_sub_from_field, ... */
 	OFPAT_RAW_SUB_FROM_FIELD,
 
+    /* OF1.5+(38): struct ofp_action_get_load_avg, ... */
+    OFPAT_RAW_GET_LOAD_AVG,
+
+
 #include "p4/src/action/types.h" // @P4:
 };
 
@@ -1772,6 +1776,56 @@ format_SUB_FROM_FIELD(const struct ofpact_sub_from_field *sff, struct ds *s)
     ds_put_cstr(s, "sub_from_field:");
     mf_format(sff->field, &sff->value, &sff->mask, s);
     ds_put_format(s, "->%s", sff->field->name);
+}
+
+// @P4:
+struct ofp_action_get_load_avg {
+    ovs_be16 type;
+    ovs_be16 len;
+
+    ovs_be16 field_id;
+    uint8_t zero[2];
+};
+OFP_ASSERT(sizeof(struct ofp_action_get_load_avg) == 8);
+
+static enum ofperr
+decode_OFPAT_RAW_GET_LOAD_AVG(const struct ofp_action_get_load_avg *a,
+                          struct ofpbuf *out)
+{
+    struct ofpact_get_load_avg *gla;
+    gla = ofpact_put_GET_LOAD_AVG(out);
+    gla->field_id = ntohs(a->field_id);
+    return 0;
+}
+
+static void
+encode_GET_LOAD_AVG(const struct ofpact_get_load_avg *gla,
+                    enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        struct ofp_action_get_load_avg *a;
+        a = put_OFPAT_GET_LOAD_AVG(out);
+        a->field_id = htons(gla->field_id);
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_GET_LOAD_AVG(const char *arg, struct ofpbuf *ofpacts,
+                   enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    struct ofpact_get_load_avg *gla;
+    gla = ofpact_put_GET_LOAD_AVG(ofpacts);
+    gla->field_id = mf_from_name(arg)->id;
+
+    return NULL;
+}
+
+static void
+format_GET_LOAD_AVG(const struct ofpact_get_load_avg *a, struct ds *s)
+{
+    const char *field;
+    field = mf_from_id(a->field_id)->name;
+    ds_put_format(s, "get_load_avg(%s)", field);
 }
 
 /* Action structure for NXAST_OUTPUT_REG.
@@ -5927,6 +5981,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
 	case OFPACT_REMOVE_HEADER:
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
+    case OFPACT_GET_LOAD_AVG:
 		return false;
 
     default:
@@ -6011,6 +6066,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
 	case OFPACT_REMOVE_HEADER:
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
+    case OFPACT_GET_LOAD_AVG:
 		return false;
 
     default:
@@ -6188,6 +6244,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
 	case OFPACT_REMOVE_HEADER:
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
+    case OFPACT_GET_LOAD_AVG:
 		return OVSINST_OFPIT11_APPLY_ACTIONS;
 
     case OFPACT_OUTPUT:
@@ -6844,6 +6901,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 	case OFPACT_REMOVE_HEADER:
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
+    case OFPACT_GET_LOAD_AVG:
 		return 0;
 
     default:
@@ -7239,6 +7297,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
 	case OFPACT_REMOVE_HEADER:
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
+    case OFPACT_GET_LOAD_AVG:
 		return false;
 
     case OFPACT_OUTPUT_REG:
