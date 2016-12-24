@@ -4117,6 +4117,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 		case OFPACT_REMOVE_HEADER:
 		case OFPACT_ADD_HEADER:
         case OFPACT_GET_LOAD_AVG:
+        case OFPACT_SEND_PROBE:
 		case OFPACT_DEPARSE:
 			break;
 
@@ -4532,6 +4533,35 @@ compose_get_load_avg(struct xlate_ctx *ctx,
     }
 
     nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, gla->index);
+
+    nl_msg_end_nested(ctx->odp_actions, offset);
+}
+
+// @P4:
+static void
+compose_send_probe(struct xlate_ctx *ctx,
+                   const struct ofpact_send_probe *sp)
+{
+    bool use_masked = ctx->xbridge->support.masked_set_action;
+    ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
+                                          ctx->odp_actions, ctx->wc,
+                                          use_masked);
+
+    size_t offset = nl_msg_start_nested(ctx->odp_actions,
+                                        OVS_ACTION_ATTR_SEND_PROBE);
+
+    nl_msg_put_unspec(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, &sp->dst_mac, sizeof sp->dst_mac);
+    nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->src_ip);
+    nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->dst_ip);
+
+    switch (sp->data) {
+        /* @Shahbaz: this needs to be renamed. */
+        OVS_COMPOSE_CALC_FIELDS_CASES
+
+        case MFF_N_IDS:
+        default:
+            OVS_NOT_REACHED();
+    }
 
     nl_msg_end_nested(ctx->odp_actions, offset);
 }
@@ -4967,6 +4997,14 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             const struct ofpact_get_load_avg *get_load_avg;
             get_load_avg = ofpact_get_GET_LOAD_AVG(a);
             compose_get_load_avg(ctx, get_load_avg);
+            break;
+        }
+
+        // @P4:
+        case OFPACT_SEND_PROBE: {
+            const struct ofpact_send_probe *send_probe;
+            send_probe = ofpact_get_SEND_PROBE(a);
+            compose_send_probe(ctx, send_probe);
             break;
         }
 

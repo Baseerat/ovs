@@ -132,6 +132,7 @@
     OFPACT(ADD_TO_FIELD,    ofpact_add_to_field, ofpact, "add_to_field") \
     OFPACT(SUB_FROM_FIELD,  ofpact_sub_from_field, ofpact, "sub_from_field") \
     OFPACT(GET_LOAD_AVG,    ofpact_get_load_avg, ofpact, "get_load_avg") \
+    OFPACT(SEND_PROBE,      ofpact_send_probe, ofpact, "send_probe") \
     OVS_OFPACTS
 
 /* enum ofpact_type, with a member OFPACT_<ENUM> for each action. */
@@ -828,6 +829,17 @@ struct ofpact_get_load_avg {
     uint8_t index; // 1: avg load over last 1 mins
                    // 2: avg load over last 5 mins
                    // 3: avg load over last 15 mins
+};
+
+// @P4:
+/* OFPACT_SEND_PROBE.
+ */
+struct ofpact_send_probe {
+    struct ofpact ofpact;
+    struct eth_addr dst_mac;
+    uint32_t src_ip;
+    uint32_t dst_ip;
+    enum mf_field_id data;
 };
 
 /* Converting OpenFlow to ofpacts. */

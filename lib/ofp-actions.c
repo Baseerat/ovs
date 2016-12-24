@@ -331,6 +331,8 @@ enum ofp_raw_action_type {
     /* OF1.5+(38): struct ofp_action_get_load_avg, ... */
     OFPAT_RAW_GET_LOAD_AVG,
 
+    /* OF1.5+(39): struct ofp_action_send_probe, ... */
+    OFPAT_RAW_SEND_PROBE,
 
 #include "p4/src/action/types.h" // @P4:
 };
@@ -1842,6 +1844,80 @@ format_GET_LOAD_AVG(const struct ofpact_get_load_avg *a, struct ds *s)
     const char *field;
     field = mf_from_id(a->field_id)->name;
     ds_put_format(s, "get_load_avg(%s,%i)", field, a->index);
+}
+
+// @P4:
+struct ofp_action_send_probe {
+    ovs_be16 type;
+    ovs_be16 len;
+
+    ovs_be32 src_ip;
+    ovs_be32 dst_ip;
+    ovs_be16 data;
+    struct eth_addr dst_mac;
+    uint8_t zero[4];
+};
+OFP_ASSERT(sizeof(struct ofp_action_send_probe) == 24);
+
+static enum ofperr
+decode_OFPAT_RAW_SEND_PROBE(const struct ofp_action_send_probe *a,
+                            struct ofpbuf *out)
+{
+    struct ofpact_send_probe *sp;
+    sp = ofpact_put_SEND_PROBE(out);
+    sp->dst_mac = a->dst_mac;
+    sp->src_ip = ntohl(a->src_ip);
+    sp->dst_ip = ntohl(a->dst_ip);
+    sp->data = ntohs(a->data);
+
+    return 0;
+}
+
+static void
+encode_SEND_PROBE(const struct ofpact_send_probe *sp,
+                    enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
+{
+    if (ofp_version >= OFP15_VERSION) {
+        struct ofp_action_send_probe *a;
+        a = put_OFPAT_SEND_PROBE(out);
+        a->dst_mac = sp->dst_mac;
+        a->src_ip = htonl(sp->src_ip);
+        a->dst_ip = htonl(sp->dst_ip);
+        a->data = htons(sp->data);
+    }
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+        parse_SEND_PROBE(const char *arg, struct ofpbuf *ofpacts,
+                           enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    struct ofpact_send_probe *sp;
+    char *dst_mac, *src_ip, *dst_ip, *data;
+    char *tokstr, *save_ptr;
+
+    save_ptr = NULL;
+    tokstr = xstrdup(arg);
+    dst_mac = strtok_r(tokstr, ", ", &save_ptr);
+    src_ip = strtok_r(NULL, ", ", &save_ptr);
+    dst_ip = strtok_r(NULL, ", ", &save_ptr);
+    data = strtok_r(NULL, ", ", &save_ptr);
+
+    sp = ofpact_put_SEND_PROBE(ofpacts);
+    str_to_mac(dst_mac, &sp->dst_mac);
+    str_to_ip(src_ip, &sp->src_ip);
+    str_to_ip(dst_ip, &sp->dst_ip);
+    sp->data = mf_from_name(data)->id;
+
+    return NULL;
+}
+
+static void
+format_SEND_PROBE(const struct ofpact_send_probe *a, struct ds *s)
+{
+    const char *dst_mac, *src_ip, *dst_ip, *data;
+    data = mf_from_id(a->data)->name;
+    ds_put_format(s, "send_probe("ETH_ADDR_FMT","IP_FMT","IP_FMT",%s)",
+                  ETH_ADDR_ARGS(a->dst_mac), IP_ARGS(a->src_ip), IP_ARGS(a->dst_ip), data);
 }
 
 /* Action structure for NXAST_OUTPUT_REG.
@@ -5998,6 +6074,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
     case OFPACT_GET_LOAD_AVG:
+    case OFPACT_SEND_PROBE:
 		return false;
 
     default:
@@ -6083,6 +6160,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
     case OFPACT_GET_LOAD_AVG:
+    case OFPACT_SEND_PROBE:
 		return false;
 
     default:
@@ -6261,6 +6339,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
     case OFPACT_GET_LOAD_AVG:
+    case OFPACT_SEND_PROBE:
 		return OVSINST_OFPIT11_APPLY_ACTIONS;
 
     case OFPACT_OUTPUT:
@@ -6918,6 +6997,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
     case OFPACT_GET_LOAD_AVG:
+    case OFPACT_SEND_PROBE:
 		return 0;
 
     default:
@@ -7314,6 +7394,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
 	case OFPACT_MODIFY_FIELD:
 	case OFPACT_DEPARSE:
     case OFPACT_GET_LOAD_AVG:
+    case OFPACT_SEND_PROBE:
 		return false;
 
     case OFPACT_OUTPUT_REG:

@@ -718,7 +718,7 @@ odp_execute_remove_header(struct dp_packet *packet,
     OVS_ODP_EXECUTE_REMOVE_HEADER /* @P4: */
 }
 
-static bool
+static void
 odp_execute_get_load_avg(struct dp_packet *packet,
                          const struct nlattr *a)
 {
@@ -745,6 +745,87 @@ odp_execute_get_load_avg(struct dp_packet *packet,
     }
 }
 
+static struct dp_packet *probe_pkt = NULL;
+
+OVS_PACKED(
+struct probe_header {
+    ovs_be32 data;
+});
+
+static struct dp_packet* compose_probe_pkt(const struct eth_addr dst_mac, uint32_t src_ip, uint32_t dst_ip, uint32_t data)
+{
+    struct dp_packet *p = dp_packet_new(0);
+
+    const struct eth_addr eth_addr_source = { { { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 } } };
+
+    eth_compose(p, dst_mac, eth_addr_source, ETH_TYPE_IP, 0);
+
+    struct ip_header *ip;
+    ip = dp_packet_put_zeros(p, sizeof *ip);
+    ip->ip_ihl_ver = IP_IHL_VER(5, 4);
+    ip->ip_tos = 0;
+    ip->ip_ttl = 64;
+    ip->ip_proto = 0xfe;
+    put_16aligned_be32(&ip->ip_src, htonl(src_ip));
+    put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
+
+//    dp_packet_set_l4(p, dp_packet_tail(p));
+//    struct udp_header *udp;
+//    size_t l4_len = sizeof *udp;
+//    udp = dp_packet_put_zeros(p, l4_len);
+//    udp->udp_src = htons(0x1234);
+//    udp->udp_dst = htons(0x2345);
+
+    dp_packet_set_l4(p, dp_packet_tail(p));
+    struct probe_header *prb;
+    size_t prb_len = sizeof *prb;
+    prb = dp_packet_put_zeros(p, prb_len);
+    prb->data = htonl(data);
+
+    ip = dp_packet_l3(p);
+    ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + prb_len);
+    ip->ip_csum = csum(ip, sizeof *ip);
+
+    return p;
+}
+
+static void
+odp_execute_send_probe(struct dp_packet *packet,
+                       const struct nlattr *a)
+{
+    struct eth_addr dst_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
+    uint32_t src_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
+    uint32_t dst_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
+    enum ovs_calc_field_attr data_key = nl_attr_type(a);
+    uint32_t data;
+
+    switch (data_key) {
+        OVS_ODP_EXECUTE_SEND_PROBE_32BIT_CASES
+
+        case OVS_CALC_FIELD_ATTR_UNSPEC:
+        case __OVS_CALC_FIELD_ATTR_MAX:
+        default:
+            OVS_NOT_REACHED();
+    }
+
+    if (!probe_pkt) {
+        probe_pkt = compose_probe_pkt(dst_mac, src_ip, dst_ip, data);
+    }
+    else
+    {
+        struct eth_header *eth = dp_packet_l2(probe_pkt);
+        eth->eth_dst = dst_mac;
+        struct ip_header *ip = ip = dp_packet_l3(probe_pkt);
+        put_16aligned_be32(&ip->ip_src, htonl(src_ip));
+        put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
+        struct probe_header *prb = dp_packet_l4(probe_pkt);
+        prb->data = htonl(data);
+        ip->ip_csum = csum(ip, sizeof *ip);
+    }
+
+    struct flow flow;
+    flow_extract(probe_pkt, &flow);
+}
 
 static bool
 requires_datapath_assistance(const struct nlattr *a)
@@ -971,6 +1052,14 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
         case OVS_ACTION_ATTR_GET_LOAD_AVG: {
             for (i = 0; i < cnt; i++) {
                 odp_execute_get_load_avg(packets[i], nl_attr_get(a));
+            }
+            break;
+        }
+
+        /* @P4: */
+        case OVS_ACTION_ATTR_SEND_PROBE: {
+            for (i = 0; i < cnt; i++) {
+                odp_execute_send_probe(packets[i], nl_attr_get(a));
             }
             break;
         }
