@@ -3477,6 +3477,20 @@ dp_netdev_clone_pkt_batch(struct dp_packet **dst_pkts,
 }
 
 static void
+gp_execute_cb(void *aux_, struct dp_packet *packet, uint32_t port)
+{
+    struct dp_netdev_execute_aux *aux = aux_;
+    struct dp_netdev_pmd_thread *pmd = aux->pmd;
+    struct dp_netdev *dp = pmd->dp;
+    struct dp_netdev_port *p;
+
+    p = dp_netdev_lookup_port(dp, u32_to_odp(port));
+    if (OVS_LIKELY(p)) {
+        netdev_send(p->netdev, pmd->tx_qid, &packet, 1, false);
+    }
+}
+
+static void
 dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
               const struct nlattr *a, bool may_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -3647,7 +3661,7 @@ dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
     struct dp_netdev_execute_aux aux = { pmd };
 
     odp_execute_actions(&aux, packets, cnt, may_steal, actions,
-                        actions_len, dp_execute_cb);
+                        actions_len, dp_execute_cb, gp_execute_cb);
 }
 
 const struct dpif_class dpif_netdev_class = {

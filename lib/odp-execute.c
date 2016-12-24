@@ -475,7 +475,7 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
     }
 
     odp_execute_actions(dp, &packet, 1, steal, nl_attr_get(subactions),
-                        nl_attr_get_size(subactions), dp_execute_action);
+                        nl_attr_get_size(subactions), dp_execute_action, NULL);
 }
 
 // @P4:
@@ -790,8 +790,8 @@ static struct dp_packet* compose_probe_pkt(const struct eth_addr dst_mac, uint32
 }
 
 static void
-odp_execute_send_probe(struct dp_packet *packet,
-                       const struct nlattr *a)
+odp_execute_send_probe(void *dp, struct dp_packet *packet,
+                       const struct nlattr *a, odp_execute_gp gp_execute_action)
 {
     struct eth_addr dst_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
     uint32_t src_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
@@ -823,8 +823,10 @@ odp_execute_send_probe(struct dp_packet *packet,
         ip->ip_csum = csum(ip, sizeof *ip);
     }
 
-    struct flow flow;
-    flow_extract(probe_pkt, &flow);
+//    struct flow flow;
+//    flow_extract(probe_pkt, &flow);
+
+    gp_execute_action(dp, probe_pkt, 1);
 }
 
 static bool
@@ -876,7 +878,7 @@ requires_datapath_assistance(const struct nlattr *a)
 void
 odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                     const struct nlattr *actions, size_t actions_len,
-                    odp_execute_cb dp_execute_action)
+                    odp_execute_cb dp_execute_action, odp_execute_gp gp_execute_action)
 {
     const struct nlattr *a;
     unsigned int left;
@@ -1059,7 +1061,7 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
         /* @P4: */
         case OVS_ACTION_ATTR_SEND_PROBE: {
             for (i = 0; i < cnt; i++) {
-                odp_execute_send_probe(packets[i], nl_attr_get(a));
+                odp_execute_send_probe(dp, packets[i], nl_attr_get(a), gp_execute_action);
             }
             break;
         }

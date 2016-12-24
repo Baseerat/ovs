@@ -3480,7 +3480,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     xlate_commit_actions(ctx);
 
     odp_execute_actions(NULL, &packet, 1, false,
-                        ctx->odp_actions->data, ctx->odp_actions->size, NULL);
+                        ctx->odp_actions->data, ctx->odp_actions->size, NULL, NULL);
 
     pin = xmalloc(sizeof *pin);
     pin->up.packet_len = dp_packet_size(packet);
