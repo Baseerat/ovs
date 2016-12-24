@@ -4552,6 +4552,7 @@ compose_send_probe(struct xlate_ctx *ctx,
 
     nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->trigger);
     nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->thresh);
+    nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->output);
     nl_msg_put_unspec(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, &sp->src_mac, sizeof sp->src_mac);
     nl_msg_put_unspec(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, &sp->dst_mac, sizeof sp->dst_mac);
     nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->src_ip);

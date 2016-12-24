@@ -764,7 +764,7 @@ static struct dp_packet* compose_probe_pkt(const struct eth_addr src_mac, const 
     ip->ip_ihl_ver = IP_IHL_VER(5, 4);
     ip->ip_tos = 0;
     ip->ip_ttl = 64;
-    ip->ip_proto = 0xfe;
+    ip->ip_proto = 0xf0;
     put_16aligned_be32(&ip->ip_src, htonl(src_ip));
     put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
 
@@ -799,6 +799,7 @@ odp_execute_send_probe(void *dp, struct dp_packet *packet,
 
     if (trigger_val % _trigger == 0) {
         uint8_t thresh = nl_attr_get_u8(a); a = nl_attr_next(a);
+        uint16_t output = nl_attr_get_u16(a); a = nl_attr_next(a);
         struct eth_addr src_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
         struct eth_addr dst_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
         uint32_t src_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
@@ -826,6 +827,7 @@ odp_execute_send_probe(void *dp, struct dp_packet *packet,
                 struct ip_header *ip = ip = dp_packet_l3(probe_pkt);
                 put_16aligned_be32(&ip->ip_src, htonl(src_ip));
                 put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
+                ip->ip_csum = 0;
                 struct probe_header *prb = dp_packet_l4(probe_pkt);
                 prb->data = data;
                 ip->ip_csum = csum(ip, sizeof *ip);
@@ -834,7 +836,7 @@ odp_execute_send_probe(void *dp, struct dp_packet *packet,
             //    struct flow flow;
             //    flow_extract(probe_pkt, &flow);
 
-            gp_execute_action(dp, probe_pkt, 1);
+            gp_execute_action(dp, probe_pkt, output-1);
         }
 
         thresh_val = data_;

@@ -75,7 +75,7 @@ calculated_field ipv4_.hdrChecksum  {
     update ipv4_checksum;
 }
 
-#define IP_PROTOCOLS_PROBE 0xfe
+#define IP_PROTOCOLS_PROBE 0xf0
 
 parser parse_ipv4 {
     extract(ipv4_);
