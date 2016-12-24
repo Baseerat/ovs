@@ -24,6 +24,12 @@ header_type ipv4_t {
     }
 }
 
+header_type metadata_0 {
+    fields {
+        temp_0 : 32;
+    }
+}
+
 parser start {
     return parse_ethernet;
 }
@@ -69,8 +75,20 @@ calculated_field ipv4_.hdrChecksum  {
     update ipv4_checksum;
 }
 
+#define IP_PROTOCOLS_PROBE 0xfe
+
 parser parse_ipv4 {
     extract(ipv4_);
+    return select(latest.protocol) {
+        IP_PROTOCOLS_PROBE  : parse_metadata_0;
+        default: ingress;
+    }
+}
+
+header metadata_0 metadata_0_;
+
+parser parse_metadata_0 {
+    extract(metadata_0_);
     return ingress;
 }
 
