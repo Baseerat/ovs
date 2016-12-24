@@ -752,13 +752,12 @@ struct probe_header {
     ovs_be32 data;
 });
 
-static struct dp_packet* compose_probe_pkt(const struct eth_addr dst_mac, uint32_t src_ip, uint32_t dst_ip, uint32_t data)
+static struct dp_packet* compose_probe_pkt(const struct eth_addr src_mac, const struct eth_addr dst_mac,
+                                           uint32_t src_ip, uint32_t dst_ip, uint32_t data)
 {
     struct dp_packet *p = dp_packet_new(0);
 
-    const struct eth_addr eth_addr_source = { { { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 } } };
-
-    eth_compose(p, dst_mac, eth_addr_source, ETH_TYPE_IP, 0);
+    eth_compose(p, dst_mac, src_mac, ETH_TYPE_IP, 0);
 
     struct ip_header *ip;
     ip = dp_packet_put_zeros(p, sizeof *ip);
@@ -780,7 +779,7 @@ static struct dp_packet* compose_probe_pkt(const struct eth_addr dst_mac, uint32
     struct probe_header *prb;
     size_t prb_len = sizeof *prb;
     prb = dp_packet_put_zeros(p, prb_len);
-    prb->data = htonl(data);
+    prb->data = data;
 
     ip = dp_packet_l3(p);
     ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + prb_len);
@@ -789,44 +788,59 @@ static struct dp_packet* compose_probe_pkt(const struct eth_addr dst_mac, uint32
     return p;
 }
 
+static uint64_t trigger_val = 0;
+static uint32_t thresh_val = -1;
+
 static void
 odp_execute_send_probe(void *dp, struct dp_packet *packet,
                        const struct nlattr *a, odp_execute_gp gp_execute_action)
 {
-    struct eth_addr dst_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
-    uint32_t src_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
-    uint32_t dst_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
-    enum ovs_calc_field_attr data_key = nl_attr_type(a);
-    uint32_t data;
+    const uint32_t _trigger = nl_attr_get_u32(a); a = nl_attr_next(a);
 
-    switch (data_key) {
-        OVS_ODP_EXECUTE_SEND_PROBE_32BIT_CASES
+    if (trigger_val % _trigger == 0) {
+        uint8_t thresh = nl_attr_get_u8(a); a = nl_attr_next(a);
+        struct eth_addr src_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
+        struct eth_addr dst_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
+        uint32_t src_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
+        uint32_t dst_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
+        enum ovs_calc_field_attr data_key = nl_attr_type(a);
+        uint32_t data, data_;
 
-        case OVS_CALC_FIELD_ATTR_UNSPEC:
-        case __OVS_CALC_FIELD_ATTR_MAX:
-        default:
-            OVS_NOT_REACHED();
+        switch (data_key) {
+            OVS_ODP_EXECUTE_SEND_PROBE_32BIT_CASES
+
+            case OVS_CALC_FIELD_ATTR_UNSPEC:
+            case __OVS_CALC_FIELD_ATTR_MAX:
+            default:
+                OVS_NOT_REACHED();
+        }
+
+        data_ = ntohl(data);
+        if (!(data_ >= (thresh_val-thresh) && data_ <= (thresh_val+thresh))) {
+            if (!probe_pkt) {
+                probe_pkt = compose_probe_pkt(src_mac, dst_mac, src_ip, dst_ip, data);
+            } else {
+                struct eth_header *eth = dp_packet_l2(probe_pkt);
+                eth->eth_src = src_mac;
+                eth->eth_dst = dst_mac;
+                struct ip_header *ip = ip = dp_packet_l3(probe_pkt);
+                put_16aligned_be32(&ip->ip_src, htonl(src_ip));
+                put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
+                struct probe_header *prb = dp_packet_l4(probe_pkt);
+                prb->data = data;
+                ip->ip_csum = csum(ip, sizeof *ip);
+            }
+
+            //    struct flow flow;
+            //    flow_extract(probe_pkt, &flow);
+
+            gp_execute_action(dp, probe_pkt, 1);
+        }
+
+        thresh_val = data_;
     }
 
-    if (!probe_pkt) {
-        probe_pkt = compose_probe_pkt(dst_mac, src_ip, dst_ip, data);
-    }
-    else
-    {
-        struct eth_header *eth = dp_packet_l2(probe_pkt);
-        eth->eth_dst = dst_mac;
-        struct ip_header *ip = ip = dp_packet_l3(probe_pkt);
-        put_16aligned_be32(&ip->ip_src, htonl(src_ip));
-        put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
-        struct probe_header *prb = dp_packet_l4(probe_pkt);
-        prb->data = htonl(data);
-        ip->ip_csum = csum(ip, sizeof *ip);
-    }
-
-//    struct flow flow;
-//    flow_extract(probe_pkt, &flow);
-
-    gp_execute_action(dp, probe_pkt, 1);
+    trigger_val++;
 }
 
 static bool

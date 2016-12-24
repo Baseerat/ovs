@@ -1851,13 +1851,16 @@ struct ofp_action_send_probe {
     ovs_be16 type;
     ovs_be16 len;
 
+    ovs_be32 trigger;
     ovs_be32 src_ip;
     ovs_be32 dst_ip;
     ovs_be16 data;
+    struct eth_addr src_mac;
     struct eth_addr dst_mac;
-    uint8_t zero[4];
+    uint8_t thresh;
+    uint8_t zero[1];
 };
-OFP_ASSERT(sizeof(struct ofp_action_send_probe) == 24);
+OFP_ASSERT(sizeof(struct ofp_action_send_probe) == 32);
 
 static enum ofperr
 decode_OFPAT_RAW_SEND_PROBE(const struct ofp_action_send_probe *a,
@@ -1865,6 +1868,9 @@ decode_OFPAT_RAW_SEND_PROBE(const struct ofp_action_send_probe *a,
 {
     struct ofpact_send_probe *sp;
     sp = ofpact_put_SEND_PROBE(out);
+    sp->trigger = a->trigger;
+    sp->thresh = a->thresh;
+    sp->src_mac = a->src_mac;
     sp->dst_mac = a->dst_mac;
     sp->src_ip = ntohl(a->src_ip);
     sp->dst_ip = ntohl(a->dst_ip);
@@ -1880,6 +1886,9 @@ encode_SEND_PROBE(const struct ofpact_send_probe *sp,
     if (ofp_version >= OFP15_VERSION) {
         struct ofp_action_send_probe *a;
         a = put_OFPAT_SEND_PROBE(out);
+        a->trigger = sp->trigger;
+        a->thresh = sp->thresh;
+        a->src_mac = sp->src_mac;
         a->dst_mac = sp->dst_mac;
         a->src_ip = htonl(sp->src_ip);
         a->dst_ip = htonl(sp->dst_ip);
@@ -1892,17 +1901,23 @@ static char * OVS_WARN_UNUSED_RESULT
                            enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     struct ofpact_send_probe *sp;
-    char *dst_mac, *src_ip, *dst_ip, *data;
+    char *trigger, *thresh, *src_mac, *dst_mac, *src_ip, *dst_ip, *data;
     char *tokstr, *save_ptr;
 
     save_ptr = NULL;
     tokstr = xstrdup(arg);
-    dst_mac = strtok_r(tokstr, ", ", &save_ptr);
+    trigger = strtok_r(tokstr, ", ", &save_ptr);
+    thresh = strtok_r(NULL, ", ", &save_ptr);
+    src_mac = strtok_r(NULL, ", ", &save_ptr);
+    dst_mac = strtok_r(NULL, ", ", &save_ptr);
     src_ip = strtok_r(NULL, ", ", &save_ptr);
     dst_ip = strtok_r(NULL, ", ", &save_ptr);
     data = strtok_r(NULL, ", ", &save_ptr);
 
     sp = ofpact_put_SEND_PROBE(ofpacts);
+    sp->trigger = (uint32_t)strtol(trigger, NULL, 10);
+    sp->thresh = (uint8_t)strtol(thresh, NULL, 10);
+    str_to_mac(src_mac, &sp->src_mac);
     str_to_mac(dst_mac, &sp->dst_mac);
     str_to_ip(src_ip, &sp->src_ip);
     str_to_ip(dst_ip, &sp->dst_ip);
@@ -1914,10 +1929,12 @@ static char * OVS_WARN_UNUSED_RESULT
 static void
 format_SEND_PROBE(const struct ofpact_send_probe *a, struct ds *s)
 {
-    const char *dst_mac, *src_ip, *dst_ip, *data;
+    const char *data;
     data = mf_from_id(a->data)->name;
-    ds_put_format(s, "send_probe("ETH_ADDR_FMT","IP_FMT","IP_FMT",%s)",
-                  ETH_ADDR_ARGS(a->dst_mac), IP_ARGS(a->src_ip), IP_ARGS(a->dst_ip), data);
+    ds_put_format(s, "send_probe(%i,%i,"ETH_ADDR_FMT","ETH_ADDR_FMT","IP_FMT","IP_FMT",%s)",
+                  a->trigger, a->thresh,
+                  ETH_ADDR_ARGS(a->src_mac), ETH_ADDR_ARGS(a->dst_mac),
+                  IP_ARGS(a->src_ip), IP_ARGS(a->dst_ip), data);
 }
 
 /* Action structure for NXAST_OUTPUT_REG.

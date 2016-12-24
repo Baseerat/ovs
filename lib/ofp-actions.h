@@ -836,6 +836,9 @@ struct ofpact_get_load_avg {
  */
 struct ofpact_send_probe {
     struct ofpact ofpact;
+    uint32_t trigger;
+    uint8_t thresh;
+    struct eth_addr src_mac;
     struct eth_addr dst_mac;
     uint32_t src_ip;
     uint32_t dst_ip;
