@@ -71,3 +71,4 @@ testsuite.tmp.orig
 
 .idea/
 CMakeLists.txt
+cmake-build-debug/
