@@ -798,14 +798,14 @@ odp_execute_send_probe(void *dp, struct dp_packet *packet,
     const uint32_t _trigger = nl_attr_get_u32(a); a = nl_attr_next(a);
 
     if (trigger_val % _trigger == 0) {
-        uint8_t thresh = nl_attr_get_u8(a); a = nl_attr_next(a);
+        /*uint8_t thresh = nl_attr_get_u8(a);*/ a = nl_attr_next(a);
         uint16_t output = nl_attr_get_u16(a); a = nl_attr_next(a);
         struct eth_addr src_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
         struct eth_addr dst_mac = *(struct eth_addr*) nl_attr_get_unspec(a, sizeof(struct eth_addr)); a = nl_attr_next(a);
         uint32_t src_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
         uint32_t dst_ip = nl_attr_get_u32(a); a = nl_attr_next(a);
         enum ovs_calc_field_attr data_key = nl_attr_type(a);
-        uint32_t data, data_;
+        uint32_t data/*, data_*/;
 
         switch (data_key) {
             OVS_ODP_EXECUTE_SEND_PROBE_32BIT_CASES
@@ -816,8 +816,8 @@ odp_execute_send_probe(void *dp, struct dp_packet *packet,
                 OVS_NOT_REACHED();
         }
 
-        data_ = ntohl(data);
-        if (!(data_ >= (thresh_val-thresh) && data_ <= (thresh_val+thresh))) {
+//        data_ = ntohl(data);
+//        if (!(data_ >= (thresh_val-thresh) && data_ <= (thresh_val+thresh))) {
             if (!probe_pkt) {
                 probe_pkt = compose_probe_pkt(src_mac, dst_mac, src_ip, dst_ip, data);
             } else {
@@ -837,9 +837,9 @@ odp_execute_send_probe(void *dp, struct dp_packet *packet,
             //    flow_extract(probe_pkt, &flow);
 
             gp_execute_action(dp, probe_pkt, output-1);
-        }
+//        }
 
-        thresh_val = data_;
+//        thresh_val = data_;
     }
 
     trigger_val++;
