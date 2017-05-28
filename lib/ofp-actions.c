@@ -1893,8 +1893,8 @@ encode_SEND_PROBE(const struct ofpact_send_probe *sp,
         a->output = htons(sp->output);
         a->src_mac = sp->src_mac;
         a->dst_mac = sp->dst_mac;
-        a->src_ip = htonl(sp->src_ip);
-        a->dst_ip = htonl(sp->dst_ip);
+        a->src_ip = sp->src_ip;
+        a->dst_ip = sp->dst_ip;
         a->data = htons(sp->data);
     }
 }
