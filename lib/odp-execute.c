@@ -836,7 +836,7 @@ odp_execute_send_probe(void *dp, struct dp_packet *packet,
             //    struct flow flow;
             //    flow_extract(probe_pkt, &flow);
 
-            gp_execute_action(dp, probe_pkt, output-1);
+            gp_execute_action(dp, probe_pkt, output);
 //        }
 
 //        thresh_val = data_;

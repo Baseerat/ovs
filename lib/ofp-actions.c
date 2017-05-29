@@ -1948,7 +1948,7 @@ format_SEND_PROBE(const struct ofpact_send_probe *a, struct ds *s)
     } else {
         ofputil_format_port(u16_to_ofp(a->output), s);
         if (u16_to_ofp(a->output) == OFPP_CONTROLLER) {
-            ds_put_format(s, ":%"PRIu16, a->max_len);
+            ds_put_format(s, ":%"PRIu16, UINT16_MAX);
         }
     }
 

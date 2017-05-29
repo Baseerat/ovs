@@ -4546,13 +4546,14 @@ compose_send_probe(struct xlate_ctx *ctx,
     ctx->xout->slow |= commit_odp_actions(&ctx->xin->flow, &ctx->base_flow,
                                           ctx->odp_actions, ctx->wc,
                                           use_masked);
+    const struct xport *xport = get_ofp_port(ctx->xbridge, u16_to_ofp(sp->output));
 
     size_t offset = nl_msg_start_nested(ctx->odp_actions,
                                         OVS_ACTION_ATTR_SEND_PROBE);
 
     nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->trigger);
     nl_msg_put_u8(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->thresh);
-    nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->output);
+    nl_msg_put_u16(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, xport->odp_port);
     nl_msg_put_unspec(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, &sp->src_mac, sizeof sp->src_mac);
     nl_msg_put_unspec(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, &sp->dst_mac, sizeof sp->dst_mac);
     nl_msg_put_u32(ctx->odp_actions, OVS_CALC_FIELD_ATTR_UNSPEC, sp->src_ip);
