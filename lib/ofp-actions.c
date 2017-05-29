@@ -1906,6 +1906,7 @@ static char * OVS_WARN_UNUSED_RESULT
     struct ofpact_send_probe *sp;
     char *trigger, *thresh, *output, *src_mac, *dst_mac, *src_ip, *dst_ip, *data;
     char *tokstr, *save_ptr;
+    ofp_port_t port;
 
     save_ptr = NULL;
     tokstr = xstrdup(arg);
@@ -1921,7 +1922,10 @@ static char * OVS_WARN_UNUSED_RESULT
     sp = ofpact_put_SEND_PROBE(ofpacts);
     sp->trigger = (uint32_t)strtol(trigger, NULL, 10);
     sp->thresh = (uint8_t)strtol(thresh, NULL, 10);
-    sp->output = (uint16_t)strtol(output, NULL, 10);
+    if (!ofputil_port_from_string(output, &port)) {
+        return xasprintf("%s: output to unknown port", output);
+    }
+    sp->output = ofp_to_u16(port);
     str_to_mac(src_mac, &sp->src_mac);
     str_to_mac(dst_mac, &sp->dst_mac);
     str_to_ip(src_ip, &sp->src_ip);
@@ -1936,8 +1940,19 @@ format_SEND_PROBE(const struct ofpact_send_probe *a, struct ds *s)
 {
     const char *data;
     data = mf_from_id(a->data)->name;
-    ds_put_format(s, "send_probe(%i,%i,%i,"ETH_ADDR_FMT","ETH_ADDR_FMT","IP_FMT","IP_FMT",%s)",
-                  a->trigger, a->thresh, a->output,
+
+    ds_put_format(s, "send_probe(%i,%i,", a->trigger, a->thresh);
+
+    if (a->output < ofp_to_u16(OFPP_MAX)) {
+        ds_put_format(s, "%"PRIu16, a->output);
+    } else {
+        ofputil_format_port(u16_to_ofp(a->output), s);
+        if (u16_to_ofp(a->output) == OFPP_CONTROLLER) {
+            ds_put_format(s, ":%"PRIu16, a->max_len);
+        }
+    }
+
+    ds_put_format(s, ","ETH_ADDR_FMT","ETH_ADDR_FMT","IP_FMT","IP_FMT",%s)",
                   ETH_ADDR_ARGS(a->src_mac), ETH_ADDR_ARGS(a->dst_mac),
                   IP_ARGS(a->src_ip), IP_ARGS(a->dst_ip), data);
 }
