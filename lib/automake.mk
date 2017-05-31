@@ -302,6 +302,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/signals.h \
 	lib/socket-util-unix.c \
 	lib/stream-unix.c
+	lib/probe-generator.c
 endif
 
 EXTRA_DIST += \
