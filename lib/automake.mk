@@ -283,7 +283,9 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/lldp/lldpd.c \
 	lib/lldp/lldpd.h \
 	lib/lldp/lldpd-structs.c \
-	lib/lldp/lldpd-structs.h
+	lib/lldp/lldpd-structs.h \
+	lib/probe-generator.c \
+	lib/probe-generator.h
 
 if WIN32
 lib_libopenvswitch_la_SOURCES += \
@@ -302,7 +304,6 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/signals.h \
 	lib/socket-util-unix.c \
 	lib/stream-unix.c
-	lib/probe-generator.c
 endif
 
 EXTRA_DIST += \
