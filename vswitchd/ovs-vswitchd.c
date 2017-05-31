@@ -77,11 +77,6 @@ main(int argc, char *argv[])
         return retval;
     }
 
-    retval = probe_generator_init(argc,argv);
-    if (retval < 0) {
-    return retval;
-    }
-
     argc -= retval;
     argv += retval;
 
@@ -111,6 +106,11 @@ main(int argc, char *argv[])
 
     bridge_init(remote);
     free(remote);
+
+    retval = probe_generator_init(argc,argv);
+    if (retval < 0) {
+        return retval;
+    }
 
     exiting = false;
     while (!exiting) {
