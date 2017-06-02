@@ -720,7 +720,7 @@ static struct ovs_mutex probe_gen_mutex = OVS_MUTEX_INITIALIZER;
 #define PROBE_GEN_SRC_IP "9.9.9.9"
 #define PROBE_GEN_DST_IP "9.9.9.10"
 #define PROBE_GEN_DATA 0xFEED  // read this using the load-avg or cpu-util functions
-#define PROBE_GEN_OUTPORT 0
+#define PROBE_GEN_OUTPORT "dpdk0"
 
 static struct dp_packet *probe_pkt = NULL;
 
@@ -770,7 +770,7 @@ static uint32_t thresh_val = -1;
 static void
 dpif_netdev_send_probe(void *dp) {
     /*uint8_t thresh = XXX;*/
-    uint16_t output = PROBE_GEN_OUTPORT;
+    char* output = PROBE_GEN_OUTPORT;
     struct eth_addr src_mac;
     str_to_mac(PROBE_GEN_SRC_MAC, &src_mac);
     struct eth_addr dst_mac;
@@ -804,16 +804,15 @@ dpif_netdev_send_probe(void *dp) {
     //    flow_extract(probe_pkt, &flow);
 
     pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
+//    p = dp_netdev_lookup_port(pmd->dp, u32_to_odp(output));
+//    if (OVS_LIKELY(p)) {
+//        netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
+//    }
     ovs_mutex_lock(&dp->port_mutex);
-    if (get_port_by_name(dp, argv[2], &port)) {
-        unixctl_command_reply_error(conn, "unknown port");
-    }
-    ovs_mutex_unlock(&dp->port_mutex);
-
-    p = dp_netdev_lookup_port(pmd->dp, u32_to_odp(output));
-    if (OVS_LIKELY(p)) {
+    if (!get_port_by_name(dp, output, &p)) {
         netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
     }
+    ovs_mutex_unlock(&dp->port_mutex);
 //        }
 
 //        thresh_val = data;
