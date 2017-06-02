@@ -710,7 +710,74 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
     unixctl_command_reply(conn, ds_cstr(&reply));
     ds_destroy(&reply);
 }
-
+
+// TODO: Do we need this?
+static struct ovs_mutex probe_gen_mutex = OVS_MUTEX_INITIALIZER;
+
+#define PROBE_GEN_INTERVAL 5
+#define PROBE_GEN_SRC_MAC "11:22:33:44:55:66"
+#define PROBE_GEN_DST_MAC "22:33:44:55:66:77"
+#define PROBE_GEN_SRC_IP "9.9.9.9"
+#define PROBE_GEN_DST_IP "9.9.9.10"
+#define PROBE_GEN_DATA 0xFEED  // read this using the load-avg or cpu-util functions
+#define PROBE_GEN_OUTPORT 0x1
+
+/*
+ * Thread that runs to generate probe every PROBE_GEN_INTERVAL seconds.
+ */
+static void *
+probe_generator(void *dp) {
+
+    pthread_detach(pthread_self());
+
+    for (;;) {
+        ovs_mutex_lock(&probe_gen_mutex);
+//        odp_execute_send_probe(X,X);
+        ovs_mutex_unlock(&probe_gen_mutex);
+        xsleep(PROBE_GEN_INTERVAL);
+    }
+
+    return NULL;
+}
+
+static void
+dpif_netdev_cfg_probe(struct unixctl_conn *conn, int argc, const char *argv[],
+                      void *aux)
+{
+    struct ds reply = DS_EMPTY_INITIALIZER;
+    struct dp_netdev_pmd_thread *pmd;
+    struct dp_netdev *dp = NULL;
+    static bool is_running = False;
+
+    ovs_mutex_lock(&dp_netdev_mutex);
+
+    if (argc == 2) {
+        dp = shash_find_data(&dp_netdevs, argv[1]);
+    } else if (shash_count(&dp_netdevs) == 1) {
+        /* There's only one datapath */
+        dp = shash_first(&dp_netdevs)->data;
+    }
+
+    if (!dp) {
+        ovs_mutex_unlock(&dp_netdev_mutex);
+        unixctl_command_reply_error(conn,
+                                    "please specify an existing datapath");
+        return;
+    }
+
+//    pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
+
+    if (!is_running) {
+        // TODO: Use cmd arguments and configure generator.
+        ovs_thread_create("probe_generator", probe_generator, dp);
+    }
+
+    ovs_mutex_unlock(&dp_netdev_mutex);
+
+    unixctl_command_reply(conn, ds_cstr(&reply));
+    ds_destroy(&reply);
+}
+
 static int
 dpif_netdev_init(void)
 {
@@ -723,6 +790,9 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/pmd-stats-clear", "[dp]",
                              0, 1, dpif_netdev_pmd_info,
                              (void *)&clear_aux);
+    unixctl_command_register("dpif-netdev/pmd-cfg-probe", "[dp]",
+                             0, 1, dpif_netdev_cfg_probe,
+                             NULL);
     return 0;
 }
 
