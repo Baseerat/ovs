@@ -808,6 +808,7 @@ dpif_netdev_send_probe(void *dp) {
 //    if (OVS_LIKELY(p)) {
 //        netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
 //    }
+    // TODO: what about these mutexes and mutexes for the dp object above?
 //    ovs_mutex_lock(&dp->port_mutex);
     if (!get_port_by_name(dp, output, &p)) {
         netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
@@ -827,6 +828,7 @@ dpif_netdev_probe_generator(void *dp) {
     pthread_detach(pthread_self());
 
     for (;;) {
+        // TODO: do we need this?
         ovs_mutex_lock(&probe_gen_mutex);
         dpif_netdev_send_probe(dp);
         ovs_mutex_unlock(&probe_gen_mutex);
