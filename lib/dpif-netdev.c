@@ -720,7 +720,7 @@ static struct ovs_mutex probe_gen_mutex = OVS_MUTEX_INITIALIZER;
 #define PROBE_GEN_SRC_IP "9.9.9.9"
 #define PROBE_GEN_DST_IP "9.9.9.10"
 #define PROBE_GEN_DATA 0xFEED  // read this using the load-avg or cpu-util functions
-#define PROBE_GEN_OUTPORT "dpdk0"
+#define PROBE_GEN_OUTPORT "dpdk1"
 
 static struct dp_packet *probe_pkt = NULL;
 
@@ -742,8 +742,8 @@ static struct dp_packet *dpif_netdev_compose_probe_pkt(const struct eth_addr src
     ip->ip_tos = 0;
     ip->ip_ttl = 64;
     ip->ip_proto = 0xf0;
-    put_16aligned_be32(&ip->ip_src, htonl(src_ip));
-    put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
+    put_16aligned_be32(&ip->ip_src, src_ip);
+    put_16aligned_be32(&ip->ip_dst, dst_ip);
 
 //    dp_packet_set_l4(p, dp_packet_tail(p));
 //    struct udp_header *udp;
@@ -756,7 +756,7 @@ static struct dp_packet *dpif_netdev_compose_probe_pkt(const struct eth_addr src
     struct probe_header *prb;
     size_t prb_len = sizeof *prb;
     prb = dp_packet_put_zeros(p, prb_len);
-    prb->data = data;
+    prb->data = htonl(data);
 
     ip = dp_packet_l3(p);
     ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + prb_len);
@@ -792,11 +792,11 @@ dpif_netdev_send_probe(void *dp) {
         eth->eth_src = src_mac;
         eth->eth_dst = dst_mac;
         struct ip_header *ip = ip = dp_packet_l3(probe_pkt);
-        put_16aligned_be32(&ip->ip_src, htonl(src_ip));
-        put_16aligned_be32(&ip->ip_dst, htonl(dst_ip));
+        put_16aligned_be32(&ip->ip_src, src_ip);
+        put_16aligned_be32(&ip->ip_dst, dst_ip);
         ip->ip_csum = 0;
         struct probe_header *prb = dp_packet_l4(probe_pkt);
-        prb->data = data;
+        prb->data = htonl(data);
         ip->ip_csum = csum(ip, sizeof *ip);
     }
 
@@ -808,11 +808,11 @@ dpif_netdev_send_probe(void *dp) {
 //    if (OVS_LIKELY(p)) {
 //        netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
 //    }
-    ovs_mutex_lock(&dp->port_mutex);
+//    ovs_mutex_lock(&dp->port_mutex);
     if (!get_port_by_name(dp, output, &p)) {
         netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
     }
-    ovs_mutex_unlock(&dp->port_mutex);
+//    ovs_mutex_unlock(&dp->port_mutex);
 //        }
 
 //        thresh_val = data;
