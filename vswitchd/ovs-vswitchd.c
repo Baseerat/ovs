@@ -49,7 +49,6 @@
 #include "openvswitch/vlog.h"
 #include "lib/vswitch-idl.h"
 #include "lib/netdev-dpdk.h"
-#include "lib/probe-generator.h"
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
