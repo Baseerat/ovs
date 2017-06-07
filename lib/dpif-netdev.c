@@ -83,6 +83,30 @@ DEFINE_STATIC_PER_THREAD_DATA(uint32_t, recirc_depth, 0)
 /* Configuration parameters. */
 enum { MAX_FLOWS = 65536 };     /* Maximum number of flows in flow table. */
 
+/* Initial values for the probe generator */ 
+#define PROBE_GEN_INTERVAL 5
+#define PROBE_GEN_SRC_MAC "11:22:33:44:55:66"
+#define PROBE_GEN_DST_MAC "22:33:44:55:66:77"
+#define PROBE_GEN_SRC_IP "9.9.9.9"
+#define PROBE_GEN_DST_IP "9.9.9.10"
+#define PROBE_GEN_DATA 0xFEED  // read this using the load-avg or cpu-util functions
+#define PROBE_GEN_OUTPORT "dpdk1"
+
+/* Set of elements required for the probe generation */
+struct  probe_gen_handler {
+    struct dp_netdev *dp;
+    uint32_t gen_interval;
+    struct eth_addr src_mac;
+    struct eth_addr dst_mac;
+    uint32_t src_ip;
+    uint32_t dst_ip;
+    uint32_t data;
+    char *output_port;
+    bool is_running;
+};
+
+static struct probe_gen_handler handler;
+
 /* Protects against changes to 'dp_netdevs'. */
 static struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
 
@@ -713,15 +737,6 @@ dpif_netdev_pmd_info(struct unixctl_conn *conn, int argc, const char *argv[],
 
 // TODO: Do we need this?
 static struct ovs_mutex probe_gen_mutex = OVS_MUTEX_INITIALIZER;
-
-#define PROBE_GEN_INTERVAL 5
-#define PROBE_GEN_SRC_MAC "11:22:33:44:55:66"
-#define PROBE_GEN_DST_MAC "22:33:44:55:66:77"
-#define PROBE_GEN_SRC_IP "9.9.9.9"
-#define PROBE_GEN_DST_IP "9.9.9.10"
-#define PROBE_GEN_DATA 0xFEED  // read this using the load-avg or cpu-util functions
-#define PROBE_GEN_OUTPORT "dpdk1"
-
 static struct dp_packet *probe_pkt = NULL;
 
 OVS_PACKED(
@@ -768,19 +783,11 @@ static struct dp_packet *dpif_netdev_compose_probe_pkt(const struct eth_addr src
 static uint32_t thresh_val = -1;
 
 static void
-dpif_netdev_send_probe(void *dp) {
-    /*uint8_t thresh = XXX;*/
-    char* output = PROBE_GEN_OUTPORT;
-    struct eth_addr src_mac;
-    str_to_mac(PROBE_GEN_SRC_MAC, &src_mac);
-    struct eth_addr dst_mac;
-    str_to_mac(PROBE_GEN_DST_MAC, &dst_mac);
-    uint32_t src_ip;
-    str_to_ip(PROBE_GEN_SRC_IP, &src_ip);
-    uint32_t dst_ip;
-    str_to_ip(PROBE_GEN_DST_IP, &dst_ip);
-    uint32_t data = PROBE_GEN_DATA;
-
+dpif_netdev_send_probe(void *dp,
+                       const struct eth_addr src_mac,
+                       const struct eth_addr dst_mac,
+                       uint32_t src_ip, uint32_t dst_ip,
+                       uint32_t data, const char *output_port) {
     struct dp_netdev_pmd_thread *pmd;
     struct dp_netdev_port *p;
 
@@ -809,11 +816,13 @@ dpif_netdev_send_probe(void *dp) {
 //        netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
 //    }
     // TODO: what about these mutexes and mutexes for the dp object above?
-//    ovs_mutex_lock(&dp->port_mutex);
-    if (!get_port_by_name(dp, output, &p)) {
+    // sean: I think we need mutexes to block changes to the dp configs after
+    // reading it.
+    //ovs_mutex_lock(&dp->port_mutex);
+    if (!get_port_by_name(dp, output_port, &p)) {
         netdev_send(p->netdev, pmd->tx_qid, &probe_pkt, 1, false);
     }
-//    ovs_mutex_unlock(&dp->port_mutex);
+    //ovs_mutex_unlock(&dp->port_mutex);
 //        }
 
 //        thresh_val = data;
@@ -824,17 +833,23 @@ dpif_netdev_send_probe(void *dp) {
  * Thread that runs to generate probe every PROBE_GEN_INTERVAL seconds.
  */
 static void *
-dpif_netdev_probe_generator(void *dp) {
+dpif_netdev_probe_generator(void *f) {
     pthread_detach(pthread_self());
 
-    for (;;) {
-        // TODO: do we need this?
-        ovs_mutex_lock(&probe_gen_mutex);
-        dpif_netdev_send_probe(dp);
-        ovs_mutex_unlock(&probe_gen_mutex);
-        xsleep(PROBE_GEN_INTERVAL);
-    }
+    struct probe_gen_handler *h = f;
 
+    while (h->is_running) {
+        // TODO: do we need this?
+        // Yes, we may want to stop the thread atomically.
+        ovs_mutex_lock(&probe_gen_mutex);
+        dpif_netdev_send_probe(h->dp, h->src_mac, h->dst_mac,
+                               h->src_ip, h->dst_ip,
+                               h->data, h->output_port);
+
+        VLOG_INFO("Sent probe\n");
+        ovs_mutex_unlock(&probe_gen_mutex);
+        xsleep(h->gen_interval);
+    }
     return NULL;
 }
 
@@ -844,31 +859,64 @@ dpif_netdev_cfg_probe(struct unixctl_conn *conn, int argc, const char *argv[],
 {
     struct ds reply = DS_EMPTY_INITIALIZER;
     struct dp_netdev_pmd_thread *pmd;
-    struct dp_netdev *dp = NULL;
     static bool is_running = false;
 
     ovs_mutex_lock(&dp_netdev_mutex);
 
-    if (argc == 2) {
-        dp = shash_find_data(&dp_netdevs, argv[1]);
+    if (argc == 9) {
+        handler.dp = shash_find_data(&dp_netdevs, argv[1]);
+        handler.gen_interval = atoi(argv[2]);
+        str_to_mac(argv[3], &handler.src_mac);
+        str_to_mac(argv[4], &handler.dst_mac);
+        str_to_ip(argv[5], &handler.src_ip);
+        str_to_ip(argv[6], &handler.dst_ip);
+        handler.data = atoi(argv[7]);
+        strcpy(handler.output_port, argv[8]);
+        // TODO: Get other data
     } else if (shash_count(&dp_netdevs) == 1) {
         /* There's only one datapath */
-        dp = shash_first(&dp_netdevs)->data;
+        handler.dp = shash_first(&dp_netdevs)->data;
+        str_to_mac(PROBE_GEN_SRC_MAC, &handler.src_mac);
+        str_to_mac(PROBE_GEN_DST_MAC, &handler.dst_mac);
+        str_to_ip(PROBE_GEN_SRC_IP, &handler.src_ip);
+        str_to_ip(PROBE_GEN_DST_IP, &handler.dst_ip);
+        handler.data = PROBE_GEN_DATA;
+        handler.output_port = PROBE_GEN_OUTPORT;
     }
 
-    if (!dp) {
+    if (!handler.dp) {
         ovs_mutex_unlock(&dp_netdev_mutex);
         unixctl_command_reply_error(conn,
                                     "please specify an existing datapath");
         return;
     }
 
-    if (!is_running) {
-        // TODO: Use cmd arguments and configure generator.
-        ovs_thread_create("probe_generator", dpif_netdev_probe_generator, dp);
-        is_running = true;
+    if (handler.is_running) {
+        ovs_thread_create("probe_generator",
+                          dpif_netdev_probe_generator,
+                          &handler);
+        handler.is_running = true;
     }
 
+    ovs_mutex_unlock(&dp_netdev_mutex);
+
+    unixctl_command_reply(conn, ds_cstr(&reply));
+    ds_destroy(&reply);
+}
+
+static void
+dpif_netdev_cfg_probe_stop(struct unixctl_conn *conn, int argc,
+                           const char *argv[], 
+                           void *aux)
+{
+    struct ds reply = DS_EMPTY_INITIALIZER;
+    struct dp_netdev_pmd_thread *pmd;
+    static bool is_running = false;
+
+    ovs_mutex_lock(&dp_netdev_mutex);
+    if (handler.is_running) {
+        handler.is_running = false;
+    }
     ovs_mutex_unlock(&dp_netdev_mutex);
 
     unixctl_command_reply(conn, ds_cstr(&reply));
@@ -887,8 +935,12 @@ dpif_netdev_init(void)
     unixctl_command_register("dpif-netdev/pmd-stats-clear", "[dp]",
                              0, 1, dpif_netdev_pmd_info,
                              (void *)&clear_aux);
-    unixctl_command_register("dpif-netdev/pmd-cfg-probe", "[dp]",
-                             0, 1, dpif_netdev_cfg_probe,
+    unixctl_command_register("dpif-netdev/pmd-cfg-probe",
+                            "[dp] [int] [smac] [dmac] [sip] [dip] [data] [out_port]",
+                             0, 8, dpif_netdev_cfg_probe,
+                             NULL);
+    unixctl_command_register("dpif-netdev/pmd-cfg-probe-stop", "", 
+                             0, 0, dpif_netdev_cfg_probe_stop,
                              NULL);
     return 0;
 }
