@@ -31,7 +31,7 @@ def gen_custom_types():
 gen_custom_types()
 
 FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
-              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),
+              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 511),
               "Ethernet":           ("MFS_ETHERNET",     6,   6),
               "IPv4":               ("MFS_IPV4",         4,   4),
               "IPv6":               ("MFS_IPV6",        16,  16),
