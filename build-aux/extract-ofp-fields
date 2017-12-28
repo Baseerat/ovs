@@ -26,12 +26,12 @@ TYPES = {"u8":       (1,   False),
 
 # @P4:
 def gen_custom_types():
-    for i in xrange(512):
+    for i in xrange(128):
         TYPES["be"+str(8*i)] = (i,   False)
 gen_custom_types()
 
 FORMATTING = {"decimal":            ("MFS_DECIMAL",      1,   8),
-              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 511),
+              "hexadecimal":        ("MFS_HEXADECIMAL",  1, 127),
               "Ethernet":           ("MFS_ETHERNET",     6,   6),
               "IPv4":               ("MFS_IPV4",         4,   4),
               "IPv6":               ("MFS_IPV6",        16,  16),
@@ -552,3 +552,4 @@ if __name__ == '__main__':
     else:
         sys.stderr.write("invalid arguments; use --help for help\n")
         sys.exit(1)
+ 
